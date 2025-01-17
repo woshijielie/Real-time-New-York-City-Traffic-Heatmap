@@ -1,26 +1,24 @@
-from asyncore import read
 import csv
-import imp
-import re
+import csv
 import json
-from select import select
-from tracemalloc import start
+import sys
+
 from flask import Flask
 from flask import render_template
-from flask import request, Response, jsonify
-from flask import g, redirect
-import sys
+from flask import request, jsonify
+
 sys.path.append("../")
 import tools.fuc
 
-
 app = Flask(__name__)
 
-import pymysql
-import psycopg
-# conn = pymysql.connect(host='localhost', user='root', password='dbuserdbuser', database="ELEN6889", charset="utf8")
-conn = psycopg.connect(host='localhost', user='root', password='dbuserdbuser', database="ELEN6889")
-conn.execute("SET client_encoding TO UTF-8")
+import psycopg2
+from psycopg2.extensions import set_wait_callback
+from psycopg2.extras import wait_select
+
+conn = psycopg2.connect(host='localhost', user='root', password='dbuserdbuser', database="ELEN6889")
+conn.set_client_encoding("UTF-8")
+set_wait_callback(wait_select)
 
 mycursor = conn.cursor()
 end_time = "2022_5_5_12_0"
@@ -56,14 +54,12 @@ def read_csv(route):
     csv_reader = csv.reader(open(route))
     points = []
     for line in csv_reader:
-        latlng = []
-        latlng.append(float(line[0]))
-        latlng.append(float(line[1]))
+        latlng = [float(line[0]), float(line[1])]
         date = line[2][:10]
         res = [latlng, date]
         points.append(res)
-    # print(points)
     return points
+
 
 def process_mysql(q, params=None):
     if params:
@@ -78,11 +74,10 @@ def process_mysql(q, params=None):
         line = data[i][0].replace(" ", "")[2:-2].split('},{')
         result.append(line)
         rating.append(float(data[i][1]))
-    
-    # weather = weatherList[data[0][2]]
+
     weather = str(weatherList[data[0][2]])
-    print(weather)
     return result, rating, weather, dataLen
+
 
 @app.route('/playBack', methods=['POST'])
 def playBack():
@@ -94,16 +89,15 @@ def playBack():
 
     # q = "SELECT points, rating, weather from `%s`"%(start_time)
     q = "SELECT points, rating, weather from %s ;"
-    params = (start_time, )
+    params = (start_time,)
     result, rating, weather, dataLen = process_mysql(q, params)
     data = [result, rating, weather, dataLen]
 
     # get the next date
     min_index = start_time.rfind("_")
-    interval = 15 # We call the API every 15 min
-    min = int(start_time[min_index + 1:])
+    interval = 15  # We call the API every 15 min
+    min = int(start_time[min_index + 1:]) + interval
     rest = start_time[:min_index]
-    min = min + interval
 
     if min == 60:
         min = 0
@@ -114,7 +108,6 @@ def playBack():
         rest = rest + "_" + tools.fuc.pro_name(str(hour))
 
     start_time = rest + "_" + tools.fuc.pro_name(str(min))
-    print(start_time)
     if start_time == end_time:
         info = "Finish"
         return json.dumps(info)
@@ -122,7 +115,6 @@ def playBack():
     start_time = start_time.replace("_", "-")
     start_time = start_time[:13] + ":" + start_time[14:]
     start_time = start_time[:10] + "T" + start_time[11:]
-    print(start_time)
 
     data.append(start_time)
     return json.dumps(data)
@@ -130,30 +122,25 @@ def playBack():
 
 @app.route('/get_history_time', methods=['POST'])
 def get_history_time():
-    global history
     history = request.get_json()
     conStrs = "T-:"
     for conStr in conStrs:
         history = history.replace(conStr, "_")
-    print(history)
     # history = "2022_05_05_09_15"
     q = "SELECT points, rating, weather FROM %s ;"
-    params = (history, )
+    params = (history,)
     result, rating, weather, dataLen = process_mysql(q, params)
 
     data = [result, rating, weather, dataLen]
 
     return json.dumps(data)
 
+
 @app.route('/get_history_weather', methods=['POST'])
 def get_weather():
     weather = request.get_json()
     data = []
 
-    result = []
-    rating = []
-    dataLen = 0
-    history_time = ""
     if weather == "2":
         q = "SELECT points, rating, weather FROM `2022_05_05_19_00`;"
         result, rating, weather, dataLen = process_mysql(q)
@@ -163,14 +150,14 @@ def get_weather():
         q = "SELECT points, rating, weather FROM `2022_05_05_20_30`;"
         result, rating, weather, dataLen = process_mysql(q)
         history_time = "2022_05_05_20_30"
-    
+
     elif weather == "4":
         q = "SELECT points, rating, weather FROM `2022_05_05_12_30`;"
         result, rating, weather, dataLen = process_mysql(q)
         history_time = "2022_05_05_12_30"
 
     else:
-        return jsonify(data = "None")
+        return jsonify(data="None")
 
     if history_time:
         history_time = history_time.replace("_", "-")
@@ -187,6 +174,7 @@ def get_weather():
 
     return json.dumps(data)
 
+
 @app.route('/')
 def home():
     """
@@ -197,11 +185,12 @@ def home():
 
     route = "../crash_data.csv"
     points = read_csv(route)
-    return render_template("snapToRoad.html", result=result, len=dataLen, rating=rating, weather=weather,points=points)
+    return render_template("snapToRoad.html", result=result, len=dataLen, rating=rating, weather=weather, points=points)
 
 
 if __name__ == '__main__':
     import click
+
 
     @click.command()
     @click.option('--debug', is_flag=True)
@@ -222,8 +211,9 @@ if __name__ == '__main__':
         """
 
         HOST, PORT = host, port
-        print ("running on %s:%d" % (HOST, PORT))
+        print("running on %s:%d" % (HOST, PORT))
         app.run(host=HOST, port=PORT, debug=debug, threaded=threaded)
+
 
     run()
     # app.run(debug=True)
