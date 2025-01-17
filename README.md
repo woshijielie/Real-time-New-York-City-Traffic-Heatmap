@@ -37,5 +37,6 @@ Flask 2.1.1
 [MIT](https://github.com/TerryWang11/Real-time-New-York-City-Traffic-Heatmap/blob/main/LICENSE) © Yukun Wang
 
 ## Contact
-Mingzhe Hu: mh4116@columbia.edu  
-Yukun Wang: yw3536@columbia.edu  
+Zhenrui Chen: zc2569@columbia.edu  
+Mingzhe Hu:   mh4116@columbia.edu  
+Yukun Wang:   yw3536@columbia.edu  
